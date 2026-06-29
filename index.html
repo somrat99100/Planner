@@ -15,9 +15,9 @@ STEP 1 — Create Firebase project
   → https://console.firebase.google.com
   → "Add project" → give it a name → Continue
 
-STEP 2 — Enable Phone Authentication
+STEP 2 — Enable Email/Password Authentication
   → Authentication → Get started → Sign-in method
-  → Phone → Enable → Save
+  → Email/Password → Enable → Save
 
 STEP 3 — Add your domain to Authorized Domains
   → Authentication → Settings → Authorized domains
@@ -66,8 +66,8 @@ const FIREBASE_CONFIG = {
 import { initializeApp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
-  getAuth, RecaptchaVerifier, signInWithPhoneNumber,
-  onAuthStateChanged, signOut
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  sendPasswordResetEmail, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc
@@ -79,7 +79,8 @@ const db   = getFirestore(app);
 
 // Expose to main script
 window._fb = { auth, db, doc, getDoc, setDoc, updateDoc, signOut,
-               RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged };
+               createUserWithEmailAndPassword, signInWithEmailAndPassword,
+               sendPasswordResetEmail, onAuthStateChanged };
 </script>
 
 <style>
@@ -203,27 +204,6 @@ input::placeholder { color:rgba(255,255,255,0.2); }
 }
 .auth-logo h1 { font-size:1.5rem; font-weight:800; margin-bottom:4px; }
 .auth-logo p  { font-size:0.83rem; color:var(--mut); }
-
-/* ── PHONE SCREEN ── */
-.phone-row { display:grid; grid-template-columns:90px 1fr; gap:8px; }
-
-/* ── OTP SCREEN ── */
-.otp-row { display:flex; gap:9px; justify-content:center; margin-bottom:18px; }
-.otp-box {
-  width:46px; height:56px; background:rgba(255,255,255,0.06);
-  border:1.5px solid var(--border); border-radius:10px;
-  font-size:1.45rem; font-weight:700; font-family:var(--mono);
-  color:#fff; text-align:center; outline:none; transition:.18s;
-  caret-color:var(--emerald);
-}
-.otp-box:focus { border-color:var(--blue); background:rgba(59,130,246,0.1); }
-
-.resend-row { text-align:center; font-size:0.82rem; color:var(--mut); margin-bottom:18px; }
-.resend-btn {
-  background:none; border:none; color:var(--blue);
-  font-size:0.82rem; font-weight:600; cursor:pointer; text-decoration:underline;
-}
-.resend-btn:disabled { opacity:.38; cursor:not-allowed; }
 
 /* ── PROFILE SETUP ── */
 .av-grid { display:flex; gap:9px; flex-wrap:wrap; justify-content:center; margin-bottom:18px; }
@@ -560,58 +540,32 @@ input::placeholder { color:rgba(255,255,255,0.2); }
 </head>
 <body>
 
-<!-- ████  SCREEN 1 — PHONE  ████ -->
-<div id="s-phone" class="screen">
+<!-- ████  SCREEN 1 — EMAIL AUTH (Sign In / Sign Up)  ████ -->
+<div id="s-auth" class="screen">
   <div>
     <div class="auth-logo">
       <div class="l-icon">📋</div>
       <h1>Study Tracker</h1>
-      <p>Sign in with your phone — no password needed</p>
+      <p id="auth-sub">Sign in to sync your plan across devices</p>
     </div>
     <div class="card">
-      <div class="card-title">Enter your phone number</div>
-      <div class="err-box" id="phone-err"></div>
+      <div class="card-title" id="auth-title">Sign In</div>
+      <div class="err-box" id="auth-err"></div>
       <div class="field">
-        <label>Phone Number</label>
-        <div class="phone-row">
-          <input type="tel" id="cc" value="+880" placeholder="+880" maxlength="5">
-          <input type="tel" id="ph" placeholder="01XXXXXXXXX" maxlength="14" inputmode="tel">
-        </div>
+        <label>Email</label>
+        <input type="text" id="auth-email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="auth-pass" placeholder="At least 6 characters" autocomplete="current-password">
       </div>
       <div class="info-box">
-        We'll send a one-time 6-digit code. Your number is only used to sign you in — nothing else is stored or shared.
+        Only your email is stored — used solely to sign you in. Nothing else is collected.
       </div>
-      <div id="recaptcha-container"></div>
-      <button class="btn-primary" id="send-otp-btn">Send Verification Code →</button>
-    </div>
-  </div>
-</div>
-
-<!-- ████  SCREEN 2 — OTP  ████ -->
-<div id="s-otp" class="screen" style="display:none;">
-  <div>
-    <div class="auth-logo">
-      <div class="l-icon">💬</div>
-      <h1>Check your SMS</h1>
-      <p id="otp-dest">Code sent to your number</p>
-    </div>
-    <div class="card">
-      <div class="card-title">Enter the 6-digit code</div>
-      <div class="err-box" id="otp-err"></div>
-      <div class="otp-row">
-        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]">
-      </div>
-      <div class="resend-row">
-        Didn't get it? <button class="resend-btn" id="resend-btn" disabled>Resend in <span id="otp-cd">60</span>s</button>
-      </div>
-      <button class="btn-primary" id="verify-btn">Verify &amp; Sign In</button>
+      <button class="btn-primary" id="auth-submit-btn">Sign In →</button>
       <div class="divider"></div>
-      <button class="btn-ghost" onclick="goBack()">← Change number</button>
+      <button class="btn-ghost" id="auth-toggle-btn">Don't have an account? Sign Up</button>
+      <button class="btn-ghost" style="margin-top:9px;opacity:.65;" id="auth-forgot-btn">Forgot password?</button>
     </div>
   </div>
 </div>
@@ -775,7 +729,7 @@ input::placeholder { color:rgba(255,255,255,0.2); }
       <div class="prof-av" id="m-av"></div>
       <div class="prof-info">
         <h4 id="m-name">—</h4>
-        <span id="m-phone">—</span>
+        <span id="m-email">—</span>
       </div>
     </div>
     <div class="stat-grid">
@@ -820,7 +774,7 @@ input::placeholder { color:rgba(255,255,255,0.2); }
 ═══════════════════════════════════════════════ */
 function waitFB(cb, n=0) {
   if (window._fb) { cb(); return; }
-  if (n > 50) { showErr('phone-err','Firebase failed to load. Check your config.'); return; }
+  if (n > 50) { showErr('auth-err','Firebase failed to load. Check your config.'); return; }
   setTimeout(() => waitFB(cb, n+1), 150);
 }
 
@@ -830,7 +784,6 @@ function waitFB(cb, n=0) {
 let fbUser     = null;
 let userProf   = null;   // { name, avatar, uid }
 let tData      = null;   // tracker data
-let confResult = null;   // Firebase phone confirmation
 let calView    = null;
 let selAv      = '🙂';
 let editAv     = null;
@@ -861,7 +814,7 @@ function setBtn(id, html, dis) {
   if (b) { b.innerHTML = html; b.disabled = !!dis; }
 }
 function showScreen(id) {
-  ['s-phone','s-otp','s-profile-setup','setup-screen','tracker-screen']
+  ['s-auth','s-profile-setup','setup-screen','tracker-screen']
     .forEach(s => {
       const el = document.getElementById(s);
       if (!el) return;
@@ -895,9 +848,9 @@ function buildAvGrid(containerId, current, onSel) {
 }
 
 /* ═══════════════════════════════════════════════
-   AUTH — PHONE
+   AUTH — EMAIL / PASSWORD
 ═══════════════════════════════════════════════ */
-let recaptcha = null;
+let authMode = 'signin'; // 'signin' | 'signup'
 
 waitFB(() => {
   const { auth, onAuthStateChanged } = window._fb;
@@ -907,121 +860,74 @@ waitFB(() => {
       await loadUserData();
     } else {
       fbUser = null; userProf = null; tData = null;
-      showScreen('s-phone');
-      initRecaptcha();
+      showScreen('s-auth');
     }
   });
 });
 
-function initRecaptcha() {
-  if (recaptcha) return;
-  const { RecaptchaVerifier, auth } = window._fb;
-  recaptcha = new RecaptchaVerifier(auth, 'recaptcha-container', {
-    size: 'invisible', callback: () => {}
-  });
+function setAuthMode(mode) {
+  authMode = mode;
+  hideErr('auth-err');
+  const isSignUp = mode === 'signup';
+  document.getElementById('auth-title').textContent  = isSignUp ? 'Create Account' : 'Sign In';
+  document.getElementById('auth-sub').textContent    = isSignUp
+    ? 'Set a password — you can sign in from any device with it'
+    : 'Sign in to sync your plan across devices';
+  document.getElementById('auth-submit-btn').textContent = isSignUp ? 'Create Account →' : 'Sign In →';
+  document.getElementById('auth-toggle-btn').textContent = isSignUp
+    ? 'Already have an account? Sign In'
+    : "Don't have an account? Sign Up";
+  document.getElementById('auth-pass').setAttribute(
+    'autocomplete', isSignUp ? 'new-password' : 'current-password'
+  );
 }
 
-document.getElementById('send-otp-btn').onclick = async () => {
-  hideErr('phone-err');
-  const cc = document.getElementById('cc').value.trim();
-  const ph = document.getElementById('ph').value.trim();
-  if (!cc || !ph) return showErr('phone-err','Enter country code and phone number.');
-  const full = cc + ph.replace(/^0/, '');
-  setBtn('send-otp-btn','<span class="spinner"></span>Sending…', true);
+document.getElementById('auth-toggle-btn').onclick = () => {
+  setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
+};
+
+document.getElementById('auth-forgot-btn').onclick = async () => {
+  hideErr('auth-err');
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) return showErr('auth-err','Enter your email above first, then tap "Forgot password?".');
   try {
-    confResult = await window._fb.signInWithPhoneNumber(window._fb.auth, full, recaptcha);
-    document.getElementById('otp-dest').textContent = `Code sent to ${full}`;
-    showScreen('s-otp');
-    focusOTP();
-    startOTPTimer();
+    await window._fb.sendPasswordResetEmail(window._fb.auth, email);
+    toast('Password reset email sent ✓');
   } catch(e) {
-    showErr('phone-err', friendlyErr(e));
-    setBtn('send-otp-btn','Send Verification Code →', false);
-    recaptcha = null;
-    setTimeout(initRecaptcha, 500);
+    showErr('auth-err', friendlyErr(e));
   }
 };
 
-function goBack() {
-  showScreen('s-phone');
-  recaptcha = null;
-  setTimeout(initRecaptcha, 300);
-}
+document.getElementById('auth-submit-btn').onclick = async () => {
+  hideErr('auth-err');
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-pass').value;
+  if (!email || !pass) return showErr('auth-err','Enter your email and password.');
+  if (pass.length < 6)  return showErr('auth-err','Password must be at least 6 characters.');
 
-/* ═══════════════════════════════════════════════
-   AUTH — OTP
-═══════════════════════════════════════════════ */
-let otpTimer = null;
-
-function focusOTP() {
-  const boxes = document.querySelectorAll('.otp-box');
-  boxes[0]?.focus();
-  boxes.forEach((box, i) => {
-    box.value = '';
-    box.oninput = e => {
-      const v = e.target.value.replace(/\D/g,'');
-      box.value = v.slice(-1);
-      if (v && i < boxes.length-1) boxes[i+1].focus();
-      if (i === boxes.length-1 && v) autoVerify();
-    };
-    box.onkeydown = e => {
-      if (e.key==='Backspace' && !box.value && i>0) boxes[i-1].focus();
-    };
-    box.onpaste = e => {
-      const txt = (e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'');
-      if (txt.length >= 6) {
-        boxes.forEach((b,j) => { b.value = txt[j]||''; });
-        boxes[5].focus(); autoVerify();
-      }
-      e.preventDefault();
-    };
-  });
-}
-
-function getOTP() { return Array.from(document.querySelectorAll('.otp-box')).map(b=>b.value).join(''); }
-function autoVerify() { if (getOTP().length===6) verifyOTP(); }
-
-function startOTPTimer() {
-  let s = 60; clearInterval(otpTimer);
-  document.getElementById('resend-btn').disabled = true;
-  document.getElementById('otp-cd').textContent = s;
-  otpTimer = setInterval(() => {
-    s--;
-    document.getElementById('otp-cd').textContent = s;
-    if (s <= 0) {
-      clearInterval(otpTimer);
-      document.getElementById('resend-btn').disabled = false;
-      document.getElementById('resend-btn').textContent = 'Resend code';
-    }
-  }, 1000);
-}
-
-document.getElementById('resend-btn').onclick = () => {
-  showScreen('s-phone'); recaptcha = null; setTimeout(initRecaptcha, 300);
-};
-document.getElementById('verify-btn').onclick = verifyOTP;
-
-async function verifyOTP() {
-  hideErr('otp-err');
-  const code = getOTP();
-  if (code.length < 6) return showErr('otp-err','Enter all 6 digits.');
-  setBtn('verify-btn','<span class="spinner"></span>Verifying…', true);
+  setBtn('auth-submit-btn','<span class="spinner"></span>Please wait…', true);
   try {
-    await confResult.confirm(code);
+    if (authMode === 'signup') {
+      await window._fb.createUserWithEmailAndPassword(window._fb.auth, email, pass);
+    } else {
+      await window._fb.signInWithEmailAndPassword(window._fb.auth, email, pass);
+    }
     // onAuthStateChanged fires next
   } catch(e) {
-    showErr('otp-err', friendlyErr(e));
-    setBtn('verify-btn','Verify &amp; Sign In', false);
+    showErr('auth-err', friendlyErr(e));
+    setBtn('auth-submit-btn', authMode === 'signup' ? 'Create Account →' : 'Sign In →', false);
   }
-}
+};
 
 function friendlyErr(e) {
   const c = e.code||'';
-  if (c.includes('invalid-phone'))    return 'Invalid phone number format.';
-  if (c.includes('too-many-requests'))return 'Too many attempts. Please wait a few minutes.';
-  if (c.includes('invalid-verification-code')) return 'Incorrect code. Try again.';
-  if (c.includes('code-expired'))     return 'Code expired. Request a new one.';
-  if (c.includes('quota-exceeded'))   return 'SMS quota exceeded. Try later.';
+  if (c.includes('email-already-in-use')) return 'An account with this email already exists. Try signing in.';
+  if (c.includes('invalid-email'))        return 'Enter a valid email address.';
+  if (c.includes('weak-password'))        return 'Password must be at least 6 characters.';
+  if (c.includes('user-not-found'))       return 'No account found with this email. Try signing up.';
+  if (c.includes('wrong-password'))       return 'Incorrect password.';
+  if (c.includes('invalid-credential'))   return 'Incorrect email or password.';
+  if (c.includes('too-many-requests'))    return 'Too many attempts. Please wait a few minutes.';
   return e.message || 'Something went wrong. Try again.';
 }
 
@@ -1075,7 +981,7 @@ document.getElementById('save-prof-btn').onclick = async () => {
     const { db, doc, setDoc } = window._fb;
     await setDoc(doc(db,'users',fbUser.uid), {
       name, avatar:selAv,
-      phone: fbUser.phoneNumber,
+      email: fbUser.email,
       createdAt: Date.now(),
       trackerData: null
     });
@@ -1105,7 +1011,7 @@ function openProfModal() {
   const av  = document.getElementById('m-av');
   av.textContent = userProf.avatar; av.style.background = bg;
   document.getElementById('m-name').textContent  = userProf.name;
-  document.getElementById('m-phone').textContent = fbUser?.phoneNumber || '—';
+  document.getElementById('m-email').textContent = fbUser?.email || '—';
 
   if (tData) {
     const all = tData.weeks.flatMap(w=>w.rows.flatMap(r=>r.days));
